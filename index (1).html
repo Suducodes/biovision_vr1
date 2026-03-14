@@ -1,0 +1,747 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>BIO-VISION | Spatial AR Interface</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+
+<script src="https://aframe.io/releases/1.3.0/aframe.min.js"></script>
+<script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js"></script>
+
+<style>
+:root {
+  --cyan: #00fff0;
+  --magenta: #ff2d78;
+  --gold: #ffd700;
+  --dark: #020c18;
+  --panel: rgba(0, 8, 24, 0.75);
+  --border: rgba(0, 255, 240, 0.25);
+  --glow-cyan: 0 0 20px rgba(0,255,240,0.6), 0 0 60px rgba(0,255,240,0.2);
+  --glow-mag: 0 0 20px rgba(255,45,120,0.6);
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  overflow: hidden;
+  background: var(--dark);
+  font-family: 'Share Tech Mono', monospace;
+  cursor: none;
+}
+
+/* ─── CUSTOM CURSOR ──────────────────────────────── */
+#cursor {
+  position: fixed;
+  width: 20px; height: 20px;
+  border: 1.5px solid var(--cyan);
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 9999;
+  transform: translate(-50%,-50%);
+  transition: transform 0.08s ease, width 0.2s, height 0.2s;
+  box-shadow: var(--glow-cyan);
+}
+#cursor::after {
+  content:''; position:absolute; top:50%; left:50%;
+  transform:translate(-50%,-50%);
+  width:4px; height:4px;
+  background: var(--cyan); border-radius:50%;
+}
+
+/* ─── SCANLINES ──────────────────────────────────── */
+body::after {
+  content:'';
+  position:fixed; top:0; left:0; width:100%; height:100%;
+  background: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 2px,
+    rgba(0,255,240,0.015) 2px,
+    rgba(0,255,240,0.015) 4px
+  );
+  pointer-events:none;
+  z-index:200;
+  animation: scanmove 8s linear infinite;
+}
+@keyframes scanmove {
+  from { background-position: 0 0; }
+  to   { background-position: 0 100px; }
+}
+
+/* ─── HAND CANVAS ────────────────────────────────── */
+#hand-canvas {
+  position:fixed; top:0; left:0;
+  width:100vw; height:100vh;
+  pointer-events:none;
+  z-index:150;
+}
+
+/* ─── FULL UI LAYER ──────────────────────────────── */
+#ui-layer {
+  position:fixed; top:0; left:0;
+  width:100vw; height:100vh;
+  pointer-events:none;
+  z-index:300;
+  display:flex;
+  flex-direction:column;
+  justify-content:space-between;
+  padding:16px;
+}
+
+/* ─── HEADER ─────────────────────────────────────── */
+.hdr {
+  display:flex;
+  justify-content:space-between;
+  align-items:flex-start;
+  gap:10px;
+}
+
+.logo-block {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--cyan);
+  padding: 14px 20px;
+  border-radius: 4px 12px 12px 4px;
+  backdrop-filter: blur(12px);
+  flex:1;
+}
+
+.logo-block h1 {
+  font-family: 'Orbitron', monospace;
+  font-size: 1.35rem;
+  font-weight: 900;
+  color: var(--cyan);
+  text-shadow: var(--glow-cyan);
+  letter-spacing: 4px;
+  line-height: 1;
+}
+
+.logo-block h1 span { color: var(--magenta); }
+
+.logo-sub {
+  font-size: 0.6rem;
+  color: rgba(0,255,240,0.5);
+  letter-spacing: 3px;
+  margin-top: 5px;
+  text-transform: uppercase;
+}
+
+.metrics-block {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-right: 3px solid var(--magenta);
+  padding: 10px 14px;
+  border-radius: 12px 4px 4px 12px;
+  backdrop-filter: blur(12px);
+  min-width: 130px;
+}
+
+.metric-row {
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  gap:12px;
+  padding: 3px 0;
+  border-bottom: 1px solid rgba(255,255,255,0.05);
+}
+.metric-row:last-child { border-bottom:none; }
+
+.metric-lbl {
+  font-size:0.5rem;
+  color:rgba(255,255,255,0.35);
+  letter-spacing:2px;
+  text-transform:uppercase;
+}
+
+.metric-val {
+  font-size:0.72rem;
+  color: var(--cyan);
+  font-weight:700;
+  text-shadow: 0 0 8px rgba(0,255,240,0.6);
+}
+
+.metric-val.hot { color: var(--magenta); text-shadow: 0 0 8px rgba(255,45,120,0.6); }
+
+/* ─── CORNER DECORATIONS ─────────────────────────── */
+.corner {
+  position:fixed;
+  width:40px; height:40px;
+  border-color: rgba(0,255,240,0.4);
+  border-style:solid;
+  pointer-events:none;
+  z-index:250;
+}
+.c-tl { top:10px; left:10px; border-width:2px 0 0 2px; }
+.c-tr { top:10px; right:10px; border-width:2px 2px 0 0; }
+.c-bl { bottom:10px; left:10px; border-width:0 0 2px 2px; }
+.c-br { bottom:10px; right:10px; border-width:0 2px 2px 0; }
+
+/* ─── CENTER RETICLE ─────────────────────────────── */
+.reticle {
+  position:fixed;
+  top:50%; left:50%;
+  transform:translate(-50%,-50%);
+  pointer-events:none;
+  z-index:250;
+}
+.reticle-ring {
+  width:180px; height:180px;
+  border:1px solid rgba(0,255,240,0.15);
+  border-radius:50%;
+  position:relative;
+  animation: reticle-spin 20s linear infinite;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+}
+.reticle-ring::before {
+  content:'';
+  position:absolute;
+  top:-2px; left:50%;
+  transform:translateX(-50%);
+  width:4px; height:4px;
+  background:var(--cyan);
+  border-radius:50%;
+  box-shadow: var(--glow-cyan);
+}
+.reticle-inner {
+  width:12px; height:12px;
+  background: rgba(0,255,240,0.3);
+  border:1px solid var(--cyan);
+  border-radius:2px;
+  box-shadow: var(--glow-cyan);
+  animation: reticle-pulse 2s ease-in-out infinite;
+}
+@keyframes reticle-spin  { to { transform:rotate(360deg); } }
+@keyframes reticle-pulse {
+  0%,100% { transform:scale(1); opacity:0.7; }
+  50%      { transform:scale(1.4); opacity:1; }
+}
+
+/* ─── BOTTOM STATUS BAR ──────────────────────────── */
+.footer {
+  display:flex;
+  flex-direction:column;
+  gap:8px;
+  align-items:center;
+}
+
+/* Status pill */
+.status-pill {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 50px;
+  padding: 10px 22px;
+  display:flex;
+  align-items:center;
+  gap:10px;
+  backdrop-filter: blur(12px);
+  transition: all 0.4s ease;
+}
+
+.status-pill.active {
+  border-color: rgba(0,255,240,0.5);
+  box-shadow: 0 0 25px rgba(0,255,240,0.2), inset 0 0 20px rgba(0,255,240,0.05);
+}
+
+.status-dot {
+  width:8px; height:8px;
+  border-radius:50%;
+  background: var(--magenta);
+  box-shadow: var(--glow-mag);
+  animation: blink 1.2s ease-in-out infinite;
+}
+
+.status-pill.active .status-dot {
+  background: var(--cyan);
+  box-shadow: var(--glow-cyan);
+}
+
+@keyframes blink {
+  0%,100% { opacity:1; }
+  50%      { opacity:0.3; }
+}
+
+.status-text {
+  font-family: 'Orbitron', monospace;
+  font-size: 0.68rem;
+  font-weight:700;
+  color: rgba(255,255,255,0.6);
+  letter-spacing:3px;
+  text-transform:uppercase;
+  transition: color 0.4s;
+}
+
+.status-pill.active .status-text { color: var(--cyan); text-shadow: 0 0 10px rgba(0,255,240,0.5); }
+
+/* Instruction bar */
+.instruction-bar {
+  font-size: 0.58rem;
+  color: rgba(255,255,255,0.25);
+  letter-spacing: 2px;
+  text-align:center;
+  text-transform:uppercase;
+}
+
+/* Landmark count badge */
+.badge {
+  position:fixed;
+  bottom:90px;
+  right:16px;
+  background: var(--panel);
+  border:1px solid var(--border);
+  border-radius:8px;
+  padding:8px 12px;
+  font-size:0.58rem;
+  color: var(--cyan);
+  letter-spacing:2px;
+  backdrop-filter:blur(8px);
+  z-index:300;
+  text-align:center;
+  line-height:1.6;
+}
+
+.badge .big {
+  display:block;
+  font-family:'Orbitron',monospace;
+  font-size:1.4rem;
+  font-weight:900;
+  line-height:1;
+  text-shadow: var(--glow-cyan);
+}
+
+
+
+/* ─── LOADING ────────────────────────────────────── */
+#loading {
+  position:fixed; top:0; left:0;
+  width:100vw; height:100vh;
+  background: var(--dark);
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  z-index:9000;
+  transition: opacity 0.6s ease;
+  gap:24px;
+}
+
+.load-logo {
+  font-family:'Orbitron',monospace;
+  font-size:2rem;
+  font-weight:900;
+  color:var(--cyan);
+  text-shadow: var(--glow-cyan);
+  letter-spacing:8px;
+  animation: glitch 3s infinite;
+}
+.load-logo span { color:var(--magenta); }
+
+@keyframes glitch {
+  0%,95%,100% { transform:none; }
+  96% { transform:translate(-2px,0) skewX(-1deg); clip-path:polygon(0 30%,100% 30%,100% 50%,0 50%); }
+  97% { transform:translate(2px,0); clip-path:polygon(0 60%,100% 60%,100% 80%,0 80%); }
+  98% { transform:none; clip-path:none; }
+}
+
+.load-ring {
+  width:80px; height:80px;
+  border-radius:50%;
+  border:2px solid transparent;
+  border-top-color: var(--cyan);
+  border-right-color: var(--magenta);
+  animation: spin 1.2s linear infinite;
+  box-shadow: var(--glow-cyan);
+}
+@keyframes spin { to { transform:rotate(360deg); } }
+
+.load-steps {
+  display:flex;
+  flex-direction:column;
+  gap:6px;
+  min-width:240px;
+}
+.load-step {
+  display:flex;
+  align-items:center;
+  gap:10px;
+  font-size:0.65rem;
+  letter-spacing:2px;
+  color:rgba(255,255,255,0.2);
+  text-transform:uppercase;
+  transition: color 0.3s;
+}
+.load-step.done { color: var(--cyan); }
+.load-step.done .step-dot { background:var(--cyan); box-shadow: var(--glow-cyan); }
+.step-dot {
+  width:6px; height:6px;
+  border-radius:50%;
+  background:rgba(255,255,255,0.1);
+  flex-shrink:0;
+}
+</style>
+</head>
+<body>
+
+<!-- CUSTOM CURSOR -->
+<div id="cursor"></div>
+
+<!-- CORNER DECORATIONS -->
+<div class="corner c-tl"></div>
+<div class="corner c-tr"></div>
+<div class="corner c-bl"></div>
+<div class="corner c-br"></div>
+
+<!-- LOADING SCREEN -->
+<div id="loading">
+  <div class="load-logo">BIO<span>·</span>VISION</div>
+  <div class="load-ring"></div>
+  <div class="load-steps">
+    <div class="load-step" id="step-ai"><div class="step-dot"></div>Initializing MediaPipe AI Core</div>
+    <div class="load-step" id="step-ar"><div class="step-dot"></div>Connecting AR Camera Feed</div>
+    <div class="load-step" id="step-model"><div class="step-dot"></div>Loading Holographic Model</div>
+  </div>
+</div>
+
+<!-- HAND SKELETON CANVAS -->
+<canvas id="hand-canvas"></canvas>
+
+<!-- CENTER RETICLE -->
+<div class="reticle">
+  <div class="reticle-ring">
+    <div class="reticle-inner"></div>
+  </div>
+</div>
+
+
+
+<!-- UI LAYER -->
+<div id="ui-layer">
+
+  <div class="hdr">
+    <div class="logo-block">
+      <h1>BIO<span>·</span>VISION</h1>
+      <div class="logo-sub">Spatial AR Interface v2.0</div>
+    </div>
+    <div class="metrics-block">
+      <div class="metric-row">
+        <span class="metric-lbl">FPS</span>
+        <span class="metric-val" id="fps-val">--</span>
+      </div>
+      <div class="metric-row">
+        <span class="metric-lbl">HAND</span>
+        <span class="metric-val hot" id="hand-conf">--</span>
+      </div>
+      <div class="metric-row">
+        <span class="metric-lbl">MODE</span>
+        <span class="metric-val">AR·MP</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="footer">
+    <div id="status-pill" class="status-pill">
+      <div class="status-dot"></div>
+      <div class="status-text" id="status-text">Awaiting Signal</div>
+    </div>
+    <div class="instruction-bar">Point at HIRO marker · Wave hand to rotate model</div>
+  </div>
+
+</div>
+
+<!-- LANDMARK BADGE -->
+<div class="badge">
+  <span class="big" id="lm-count">0</span>
+  <span>LANDMARKS</span>
+</div>
+
+<!-- A-FRAME AR SCENE -->
+<a-scene
+  embedded
+  arjs="sourceType: webcam; debugUIEnabled: false; trackingMethod: best;"
+  vr-mode-ui="enabled: false"
+  renderer="antialias: true; colorManagement: true;"
+  gltf-model="dracoDecoderPath: https://www.gstatic.com/draco/v1/decoders/;">
+
+  <a-assets>
+    <!-- Loads GLB from same repo folder -->
+    <a-asset-item id="heart-model" src="./heart_compressed.glb" response-type="arraybuffer"></a-asset-item>
+  </a-assets>
+
+  <a-marker preset="hiro" id="hiro-marker"
+    smooth="true" smoothCount="8" smoothTolerance="0.01" smoothThreshold="2"
+    emitevents="true">
+
+    <!-- Glow ring below the model -->
+    <a-ring color="#00fff0" radius-inner="0.3" radius-outer="0.5"
+      rotation="-90 0 0" position="0 0.01 0" opacity="0.25"
+      animation="property:rotation; to:-90 360 0; dur:6000; loop:true; easing:linear">
+    </a-ring>
+
+    <!-- The 3D model container -->
+    <a-entity id="heart-container" position="0 0.6 0" scale="1.5 1.5 1.5">
+      <a-gltf-model id="heart-gltf" src="#heart-model" animation-mixer></a-gltf-model>
+    </a-entity>
+
+    <!-- Orbiting particle dots -->
+    <a-sphere position="0.8 0.6 0" radius="0.04" color="#ff2d78" opacity="0.9"
+      animation="property:position; to:-0.8 0.6 0; dir:alternate; dur:2000; loop:true; easing:easeInOutSine">
+    </a-sphere>
+    <a-sphere position="0 0.6 0.8" radius="0.04" color="#00fff0" opacity="0.9"
+      animation="property:position; to:0 0.6 -0.8; dir:alternate; dur:2400; loop:true; easing:easeInOutSine">
+    </a-sphere>
+
+  </a-marker>
+
+  <a-entity camera></a-entity>
+</a-scene>
+
+<!-- MAIN SCRIPT -->
+<script type="module">
+import { HandLandmarker, FilesetResolver }
+  from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.3/vision_bundle.mjs";
+
+/* ── DOM refs ──────────────────────────────────── */
+const loading    = document.getElementById('loading');
+const stepAI     = document.getElementById('step-ai');
+const stepAR     = document.getElementById('step-ar');
+const stepModel  = document.getElementById('step-model');
+const statusPill = document.getElementById('status-pill');
+const statusText = document.getElementById('status-text');
+const fpsVal     = document.getElementById('fps-val');
+const handConf   = document.getElementById('hand-conf');
+const lmCount    = document.getElementById('lm-count');
+const hCanvas    = document.getElementById('hand-canvas');
+const hCtx       = hCanvas.getContext('2d');
+const heartCont  = document.getElementById('heart-container');
+const cursor     = document.getElementById('cursor');
+
+/* ── Cursor follow ─────────────────────────────── */
+document.addEventListener('mousemove', e => {
+  cursor.style.left = e.clientX + 'px';
+  cursor.style.top  = e.clientY + 'px';
+});
+
+/* ── Canvas resize ─────────────────────────────── */
+function resizeCanvas() {
+  hCanvas.width  = window.innerWidth;
+  hCanvas.height = window.innerHeight;
+}
+window.addEventListener('resize', resizeCanvas);
+resizeCanvas();
+
+/* ── State ─────────────────────────────────────── */
+let handLandmarker, lastVideoTime = -1;
+let aiReady = false, cameraReady = false;
+let smoothX = 0, smoothY = 0;
+let isHandPresent = false, lostTimeout = null;
+let frameCount = 0, lastFpsTime = performance.now();
+let modelLoaded = false;
+
+/* ── Loading step helpers ──────────────────────── */
+function markStep(el) { el.classList.add('done'); }
+
+function checkReady() {
+  if (aiReady && cameraReady) {
+    markStep(stepModel);
+    setTimeout(() => {
+      loading.style.opacity = '0';
+      setTimeout(() => loading.style.display = 'none', 600);
+    }, 600);
+  }
+}
+
+/* ── MediaPipe connections ─────────────────────── */
+const CONNECTIONS = [
+  [0,1],[1,2],[2,3],[3,4],
+  [0,5],[5,6],[6,7],[7,8],
+  [0,9],[9,10],[10,11],[11,12],
+  [0,13],[13,14],[14,15],[15,16],
+  [0,17],[17,18],[18,19],[19,20],
+  [5,9],[9,13],[13,17],[0,17]
+];
+
+/* ── Draw neon hand skeleton ───────────────────── */
+function drawHand(landmarks, w, h) {
+  hCtx.clearRect(0, 0, w, h);
+
+  /* neon lines */
+  CONNECTIONS.forEach(([a, b]) => {
+    const p1 = landmarks[a];
+    const p2 = landmarks[b];
+    const x1 = p1.x * w, y1 = p1.y * h;
+    const x2 = p2.x * w, y2 = p2.y * h;
+
+    /* outer glow */
+    hCtx.beginPath();
+    hCtx.strokeStyle = 'rgba(0,255,240,0.15)';
+    hCtx.lineWidth = 10;
+    hCtx.shadowBlur = 0;
+    hCtx.moveTo(x1, y1); hCtx.lineTo(x2, y2);
+    hCtx.stroke();
+
+    /* core line */
+    hCtx.beginPath();
+    hCtx.strokeStyle = '#00fff0';
+    hCtx.lineWidth = 1.5;
+    hCtx.shadowColor = '#00fff0';
+    hCtx.shadowBlur = 12;
+    hCtx.moveTo(x1, y1); hCtx.lineTo(x2, y2);
+    hCtx.stroke();
+  });
+
+  hCtx.shadowBlur = 0;
+
+  /* landmarks */
+  landmarks.forEach((lm, i) => {
+    const x = lm.x * w, y = lm.y * h;
+    const isJoint = [4,8,12,16,20].includes(i);
+
+    hCtx.beginPath();
+    hCtx.shadowColor = isJoint ? '#ff2d78' : '#00fff0';
+    hCtx.shadowBlur = isJoint ? 20 : 14;
+    hCtx.fillStyle = isJoint ? '#ff2d78' : '#00fff0';
+    hCtx.arc(x, y, isJoint ? 5 : 3, 0, Math.PI * 2);
+    hCtx.fill();
+  });
+
+  hCtx.shadowBlur = 0;
+}
+
+/* ── Init MediaPipe ────────────────────────────── */
+async function initAI() {
+  try {
+    const vision = await FilesetResolver.forVisionTasks(
+      "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.3/wasm"
+    );
+    handLandmarker = await HandLandmarker.createFromOptions(vision, {
+      baseOptions: {
+        modelAssetPath: 'https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task',
+        delegate: 'GPU'
+      },
+      runningMode: 'VIDEO',
+      numHands: 1,
+      minHandDetectionConfidence: 0.55,
+      minTrackingConfidence: 0.55
+    });
+    aiReady = true;
+    markStep(stepAI);
+    checkReady();
+  } catch (e) {
+    console.error('AI init failed', e);
+    statusText.textContent = 'AI INIT FAILED';
+  }
+}
+
+/* ── Find AR.js video feed ─────────────────────── */
+function findVideo() {
+  const video = document.querySelector('video');
+  if (video) {
+    video.setAttribute('playsinline', '');
+    video.setAttribute('autoplay', '');
+    video.setAttribute('muted', '');
+
+    const start = () => {
+      if (!cameraReady) {
+        cameraReady = true;
+        markStep(stepAR);
+        checkReady();
+        loop(video);
+      }
+    };
+
+    if (video.readyState >= 2) start();
+    else video.addEventListener('loadeddata', start);
+  } else {
+    setTimeout(findVideo, 200);
+  }
+}
+
+/* ── Main render loop ──────────────────────────── */
+function loop(video) {
+  /* FPS */
+  frameCount++;
+  const now = performance.now();
+  if (now - lastFpsTime >= 1000) {
+    fpsVal.textContent = frameCount;
+    frameCount = 0;
+    lastFpsTime = now;
+  }
+
+  /* Heartbeat pulse on model */
+  const t = now * 0.003;
+  const pulse = 1 + Math.sin(t) * 0.02;
+  heartCont.setAttribute('scale', `${pulse} ${pulse} ${pulse}`);
+
+  /* Hand detection */
+  if (handLandmarker && video.currentTime !== lastVideoTime) {
+    lastVideoTime = video.currentTime;
+    const result = handLandmarker.detectForVideo(video, now);
+
+    if (result.landmarks && result.landmarks.length > 0) {
+      const lms = result.landmarks[0];
+      lmCount.textContent = lms.length;
+
+      /* Confidence score (use world landmark z spread as proxy) */
+      const conf = result.handedness?.[0]?.[0]?.score;
+      handConf.textContent = conf ? Math.round(conf * 100) + '%' : '--';
+
+      if (!isHandPresent) {
+        isHandPresent = true;
+        clearTimeout(lostTimeout);
+        statusPill.classList.add('active');
+        statusText.textContent = 'Hand Detected';
+      }
+
+      /* Smooth wrist tracking → model rotation */
+      const wrist = lms[0];
+      smoothX += (wrist.x - smoothX) * 0.12;
+      smoothY += (wrist.y - smoothY) * 0.12;
+
+      const rx = (smoothY - 0.5) * 200;
+      const ry = (smoothX - 0.5) * 200;
+      heartCont.setAttribute('rotation', `${rx} ${ry} 0`);
+
+      /* Draw neon skeleton */
+      drawHand(lms, hCanvas.width, hCanvas.height);
+
+    } else {
+      lmCount.textContent = '0';
+      handConf.textContent = '--';
+      hCtx.clearRect(0, 0, hCanvas.width, hCanvas.height);
+
+      if (isHandPresent) {
+        isHandPresent = false;
+        lostTimeout = setTimeout(() => {
+          statusPill.classList.remove('active');
+          statusText.textContent = 'Scanning...';
+        }, 600);
+      }
+
+      /* Drift back to center */
+      const r = heartCont.getAttribute('rotation');
+      if (r) heartCont.setAttribute('rotation', `${r.x * 0.93} ${r.y * 0.93} 0`);
+    }
+  }
+
+  requestAnimationFrame(() => loop(video));
+}
+
+/* ── Camera error ──────────────────────────────── */
+window.addEventListener('camera-error', () => {
+  document.querySelector('.load-ring').style.display = 'none';
+  document.querySelector('.load-logo').textContent = 'CAM BLOCKED';
+  document.querySelector('.load-logo').style.color = '#ff2d78';
+  stepAR.textContent = '⚠ Allow camera in browser settings, then reload';
+  stepAR.style.color = '#ff2d78';
+});
+
+/* ── Boot ──────────────────────────────────────── */
+initAI();
+findVideo();
+</script>
+</body>
+</html>
