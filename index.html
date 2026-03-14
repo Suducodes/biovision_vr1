@@ -466,9 +466,8 @@ body::after {
   renderer="antialias: true; colorManagement: true;"
   gltf-model="dracoDecoderPath: https://www.gstatic.com/draco/v1/decoders/;">
 
-  <a-assets>
-    <!-- Loads GLB from same repo folder -->
-    <a-asset-item id="heart-model" src="./heart_compressed.glb" response-type="arraybuffer"></a-asset-item>
+  <a-assets timeout="30000">
+    <a-asset-item id="heart-model" src="./heart_compressed.glb"></a-asset-item>
   </a-assets>
 
   <a-marker preset="hiro" id="hiro-marker"
