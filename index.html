@@ -466,9 +466,7 @@ body::after {
   renderer="antialias: true; colorManagement: true;"
   gltf-model="dracoDecoderPath: https://www.gstatic.com/draco/v1/decoders/;">
 
-  <a-assets timeout="30000">
-    <a-asset-item id="heart-model" src="./heart.glb"></a-asset-item>
-  </a-assets>
+
 
   <a-marker preset="hiro" id="hiro-marker"
     smooth="true" smoothCount="8" smoothTolerance="0.01" smoothThreshold="2"
@@ -482,7 +480,7 @@ body::after {
 
     <!-- The 3D model container -->
     <a-entity id="heart-container" position="0 0.6 0" scale="1.5 1.5 1.5">
-      <a-gltf-model id="heart-gltf" src="#heart-model" animation-mixer></a-gltf-model>
+      <a-gltf-model id="heart-gltf" src="./heart.glb" animation-mixer></a-gltf-model>
     </a-entity>
 
     <!-- Orbiting particle dots -->
